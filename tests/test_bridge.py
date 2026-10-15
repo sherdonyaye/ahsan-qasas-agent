@@ -45,3 +45,27 @@ class Bridge(unittest.TestCase):
             self.assertTrue((b.root/(vid+'-cloud.json')).exists())
 
 if __name__=='__main__':unittest.main()
+
+class ArtifactPaths(unittest.TestCase):
+    def test_flat_and_nested_outputs_both_load(self):
+        import io,json,zipfile
+        vid='ndyUFPMNjMA'
+        for prefix in ['',vid+'/']:
+            data=io.BytesIO()
+            with zipfile.ZipFile(data,'w') as z:
+                for name in ['transcript.txt','transcript.srt','transcript-source-cues.txt']:
+                    z.writestr(prefix+name,'sample')
+                z.writestr(prefix+'transcript.json',json.dumps({'id':vid,'sample_only':False,'processing_finished':True}))
+            with tempfile.TemporaryDirectory() as d:
+                mod.save_cloud_output(data.getvalue(),Path(d),vid)
+                self.assertEqual((Path(d)/'transcript.txt').read_text(),'sample')
+
+    def test_wrong_episode_cannot_be_imported(self):
+        import io,json,zipfile
+        data=io.BytesIO()
+        with zipfile.ZipFile(data,'w') as z:
+            for name in ['transcript.txt','transcript.srt','transcript-source-cues.txt']:z.writestr(name,'sample')
+            z.writestr('transcript.json',json.dumps({'id':'wrong','sample_only':False,'processing_finished':True}))
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(RuntimeError):mod.save_cloud_output(data.getvalue(),Path(d),'ndyUFPMNjMA')
+            self.assertFalse((Path(d)/'transcript.txt').exists())
