@@ -1,0 +1,4 @@
+faster-whisper==1.2.1
+av>=16,<19
+yt-dlp==2026.8.19
+requests>=2.32,<3
