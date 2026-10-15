@@ -33,6 +33,25 @@ def compact_audio(source,stop):
     finally:
         temporary.unlink(missing_ok=True)
 
+def save_cloud_output(content,out,vid):
+    # upload-artifact can preserve a video-id directory beneath its wildcard root.
+    names=['transcript.txt','transcript.srt','transcript.json','transcript-source-cues.txt']
+    payload={}
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        for name in names:
+            matches=[entry for entry in archive.namelist()
+                     if entry in {name,vid+'/'+name}]
+            if len(matches)!=1: raise RuntimeError('Missing or ambiguous cloud output: '+name)
+            payload[name]=archive.read(matches[0])
+    report=json.loads(payload['transcript.json'])
+    if report['id']!=vid or report['sample_only'] or not report['processing_finished']:
+        raise RuntimeError('Invalid cloud result')
+    out.mkdir(parents=True,exist_ok=True)
+    for name,data in payload.items():
+        temporary=out/(name+'.tmp')
+        temporary.write_bytes(data)
+        temporary.replace(out/name)
+
 class CloudBot(Bot):
     def __init__(self,token,github_token):
         super().__init__(token)
@@ -75,7 +94,7 @@ class CloudBot(Bot):
                 from agent import atomic_json
                 atomic_json(checkpoint,state)
             if not state.get('dispatched'):
-                self.github('POST','/actions/workflows/'+WORKFLOW+'/dispatches',json={'ref':'main','inputs':{'ticket':ticket,'video_id':vid,'file_id':state['file_id']}})
+                self.github('POST','/actions/workflows/'+WORKFLOW+'/dispatches',json={'ref':'main','inputs':{'ticket':state['ticket'],'video_id':vid,'file_id':state['file_id']}})
                 state['dispatched']=True
                 from agent import atomic_json
                 atomic_json(checkpoint,state)
@@ -103,12 +122,7 @@ class CloudBot(Bot):
             if not response.ok: raise RuntimeError('Could not retrieve cloud output')
             out=self.agent.root/'results'/vid
             out.mkdir(parents=True,exist_ok=True)
-            with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-                for name in ['transcript.txt','transcript.srt','transcript.json','transcript-source-cues.txt']:
-                    (out/name).write_bytes(z.read(name))
-            report=json.loads((out/'transcript.json').read_text())
-            if report['id']!=vid or report['sample_only'] or not report['processing_finished']:
-                raise RuntimeError('Invalid cloud result')
+            save_cloud_output(response.content,out,vid)
             self.agent.update(vid,state='complete',error='')
             checkpoint.unlink(missing_ok=True)
 
