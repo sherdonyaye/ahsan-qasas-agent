@@ -1,0 +1,40 @@
+name: Telegram audio transcription
+run-name: ${{ inputs.ticket }}
+on:
+  workflow_dispatch:
+    inputs:
+      ticket:
+        required: true
+        type: string
+      video_id:
+        required: true
+        type: string
+      file_id:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  transcribe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: |
+          python -m pip install --only-binary=:all: -r requirements.txt
+      - name: Transcribe Telegram audio
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          VIDEO_ID: ${{ inputs.video_id }}
+          FILE_ID: ${{ inputs.file_id }}
+        run: python telegram_cloud_worker.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.ticket }}
+          path: work/cloud-telegram/results/*/transcript*
+          if-no-files-found: error
+          retention-days: 7
