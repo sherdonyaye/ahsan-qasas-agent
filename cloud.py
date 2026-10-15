@@ -123,6 +123,9 @@ def main():
         if now['state']=='error': break
     checkpoint(a)
     if processed: telegram_export(ROOT/'Ahsan-Qasas-Review-Export.zip')
+    if any(r['state']=='error' for r in a.rows()):
+        print('Queue contains failed episodes. Saved report is available; this is NOT successful transcription.')
+        raise SystemExit(1)
 
 if __name__=='__main__':
     main()
